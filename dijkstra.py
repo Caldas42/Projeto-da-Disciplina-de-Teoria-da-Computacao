@@ -1,4 +1,7 @@
 from typing import Dict, List, Tuple, Any, Optional
+import random
+import time
+import statistics
 
 Node = Any
 Edge = Tuple[Node, float]
@@ -30,7 +33,7 @@ def dijkstra_simple(graph: Graph, source: Node) -> Tuple[Dict[Node, float], Dict
 
         for v, w in graph[u]:
             if w < 0:
-                raise ValueError("Dijkstra simples não suporta arestas com peso negativo.")
+                raise ValueError("Dijkstra simples não suporta pesos negativos.")
             if not visited[v]:
                 nd = dist[u] + w
                 if nd < dist[v]:
@@ -39,31 +42,49 @@ def dijkstra_simple(graph: Graph, source: Node) -> Tuple[Dict[Node, float], Dict
 
     return dist, prev
 
-def reconstruct_path(prev: Dict[Node, Optional[Node]], source: Node, target: Node) -> List[Node]:
-    if target not in prev:
-        return []
-    path = []
-    cur = target
-    while cur is not None:
-        path.append(cur)
-        if cur == source:
-            break
-        cur = prev[cur]
-    path.reverse()
-    return path if path and path[0] == source else []
+def gerar_grafo(n: int, densidade: float = 0.3) -> Graph:
+    graph: Graph = {}
+    nodes = [f"V{i}" for i in range(n)]
+
+    for u in nodes:
+        graph[u] = []
+        for v in nodes:
+            if u != v and random.random() < densidade:
+                peso = random.randint(1, 10)
+                graph[u].append((v, peso))
+
+    return graph
+
+def medir_tempo(graph: Graph, source: Node, repeticoes: int = 20) -> List[float]:
+    tempos = []
+    for _ in range(repeticoes):
+        t0 = time.perf_counter()
+        dijkstra_simple(graph, source)
+        t1 = time.perf_counter()
+        tempos.append(t1 - t0)
+    return tempos
 
 if __name__ == "__main__":
-    G: Graph = {
-        'A': [('B', 2), ('C', 5)],
-        'B': [('C', 1), ('D', 4)],
-        'C': [('D', 2)],
-        'D': [('E', 1)],
-        'E': []
+    random.seed(0)
+
+    tamanhos = {
+        "pequeno": 200,
+        "medio": 400,
+        "grande": 1000
     }
 
-    dist, prev = dijkstra_simple(G, 'A')
-    print("Distâncias a partir de A:")
-    for v in sorted(G.keys()):
-        d = dist[v]
-        print(f"  A -> {v}: {d if d != INF else 'inacessível'}")
-    print("Caminho A -> E:", reconstruct_path(prev, 'A', 'E'))
+    repeticoes = 20 
+
+    for nome, n in tamanhos.items():
+        print(f"\nRodando grafo {nome} (n = {n}) {repeticoes} vezes...")
+
+        G = gerar_grafo(n)
+        source = "V0"
+
+        tempos = medir_tempo(G, source, repeticoes)
+
+        media = statistics.mean(tempos)
+        stdev = statistics.stdev(tempos) if len(tempos) > 1 else 0.0
+
+        print(f"  Tempo médio : {media:.6f} s")
+        print(f"  Desvio-padrão: {stdev:.6f} s")

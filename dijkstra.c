@@ -1,49 +1,111 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <time.h>
+#include <math.h>
 
 #define INF (INT_MAX / 4)
 
+int *gerar_grafo(int n, double density);
+double get_time_seconds(void);
+void medir_tempo(int n, int *graph, int repeticoes, double *out_times);
+void estatistica(int repeticoes, const double *times, double *mean_out, double *stdev_out);
 void dijkstra(int n, int *graph, int src, int *dist, int *prev);
-void print_path(int *prev, int src, int target);
 
 int main(void) {
-    int n = 5;
+    srand(0);
+
+    const int repeticoes = 20;
+    struct { const char *name; int n; double density; } casos[] = {
+        {"pequeno", 200,  0.3},
+        {"medio",  400, 0.3},
+        {"grande", 1000, 0.3}
+    };
+    const int ncasos = sizeof(casos) / sizeof(casos[0]);
+
+    for (int ci = 0; ci < ncasos; ++ci) {
+        const char *nome = casos[ci].name;
+        int n = casos[ci].n;
+        double density = casos[ci].density;
+
+        printf("\nRodando grafo %s (n = %d, density = %.2f) %d vezes...\n", nome, n, density, repeticoes);
+
+        int *G = gerar_grafo(n, density);
+        if (!G) { fprintf(stderr, "Erro ao gerar grafo %s\n", nome); return 1; }
+
+        double *tempos = (double*)malloc(repeticoes * sizeof(double));
+        if (!tempos) { perror("malloc"); free(G); return 1; }
+
+        medir_tempo(n, G, repeticoes, tempos);
+
+        double media = 0.0, stdev = 0.0;
+        estatistica(repeticoes, tempos, &media, &stdev);
+
+        printf("  Tempo medio : %.6f s\n", media);
+        printf("  Desvio-padrao: %.6f s\n", stdev);
+
+        free(tempos);
+        free(G);
+    }
+
+    printf("\n");
+    return 0;
+}
+
+int *gerar_grafo(int n, double density) {
     int *graph = (int*)malloc(n * n * sizeof(int));
-    if (!graph) { perror("malloc"); return 1; }
+    if (!graph) { perror("malloc"); return NULL; }
 
     for (int i = 0; i < n * n; ++i) graph[i] = -1;
 
-    graph[0*n + 1] = 2;
-    graph[0*n + 2] = 5;
-    graph[1*n + 2] = 1;
-    graph[1*n + 3] = 4;
-    graph[2*n + 3] = 2;
-    graph[3*n + 4] = 1;
+    for (int u = 0; u < n; ++u) {
+        for (int v = 0; v < n; ++v) {
+            if (u == v) continue;
+            double r = rand() / (RAND_MAX + 1.0);
+            if (r < density) {
+                int peso = (rand() % 10) + 1;
+                graph[u * n + v] = peso;
+            }
+        }
+    }
 
+    return graph;
+}
+
+double get_time_seconds(void) {
+    return (double)clock() / CLOCKS_PER_SEC;
+}
+
+void medir_tempo(int n, int *graph, int repeticoes, double *out_times) {
     int *dist = (int*)malloc(n * sizeof(int));
     int *prev = (int*)malloc(n * sizeof(int));
-    if (!dist || !prev) { perror("malloc"); return 1; }
+    if (!dist || !prev) { perror("malloc"); exit(1); }
 
-    dijkstra(n, graph, 0, dist, prev);
-
-    printf("Distâncias a partir de 0 (A):\n");
-    for (int i = 0; i < n; ++i) {
-        if (dist[i] == INF) printf("  0 -> %d: inacessível\n", i);
-        else printf("  0 -> %d: %d\n", i, dist[i]);
+    for (int i = 0; i < repeticoes; ++i) {
+        double t0 = get_time_seconds();
+        dijkstra(n, graph, 0, dist, prev);
+        double t1 = get_time_seconds();
+        out_times[i] = t1 - t0;
     }
 
-    printf("\nCaminho 0 -> 4: ");
-    if (dist[4] == INF) printf("inacessível\n");
-    else {
-        print_path(prev, 0, 4);
-        printf("\n");
-    }
-
-    free(graph);
     free(dist);
     free(prev);
-    return 0;
+}
+
+void estatistica(int repeticoes, const double *times, double *mean_out, double *stdev_out) {
+    double sum = 0.0;
+    for (int i = 0; i < repeticoes; ++i) sum += times[i];
+    double mean = sum / (double)repeticoes;
+
+    double s2 = 0.0;
+    for (int i = 0; i < repeticoes; ++i) {
+        double d = times[i] - mean;
+        s2 += d * d;
+    }
+    double stdev = (repeticoes > 1) ? sqrt(s2 / (repeticoes - 1)) : 0.0;
+
+    *mean_out = mean;
+    *stdev_out = stdev;
 }
 
 void dijkstra(int n, int *graph, int src, int *dist, int *prev) {
@@ -81,15 +143,4 @@ void dijkstra(int n, int *graph, int src, int *dist, int *prev) {
     }
 
     free(visited);
-}
-
-void print_path(int *prev, int src, int target) {
-    if (target == src) {
-        printf("%d", src);
-    } else if (prev[target] == -1) {
-        printf("inacessível");
-    } else {
-        print_path(prev, src, prev[target]);
-        printf(" -> %d", target);
-    }
 }
